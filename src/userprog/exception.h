@@ -11,8 +11,7 @@
 
 void exception_init (void);
 void exception_print_stats (void);
-bool allocate_new_pages(uintptr_t fault_addr, size_t n, struct thread *t);
-size_t num_pages_to_extend(uintptr_t esp, uintptr_t fault_addr);
-bool extend_stack(uintptr_t esp, uintptr_t fault_addr);
+bool allocate_new_page(void *fault_addr, struct thread *t);
+bool extend_stack(void *esp, void *fault_addr);
 
 #endif /* userprog/exception.h */

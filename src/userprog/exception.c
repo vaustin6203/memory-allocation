@@ -116,45 +116,23 @@ kill (struct intr_frame *f)
 /* Extends the stack by n pages. If we do not have enough free
  * pages to extend the stack, returns false. Returns true on 
  * success. */ 
-bool allocate_new_pages(uintptr_t fault_addr, size_t n, struct thread *t) {
-	uintptr_t kpage = (uintptr_t) palloc_get_multiple(PAL_USER | PAL_ZERO, n);
-	bool success;
-	uint32_t pg_idx;
-	void *upage;
+bool allocate_new_page(void *fault_addr, struct thread *t) {
+	void * kpage = palloc_get_page(PAL_USER | PAL_ZERO);
 
-	if (!kpage) {
+	if (kpage == NULL) {
 		return false;
 	}
-
-	for (int i = 0; i < ((int) n); i++) {
-		pg_idx = i * PGSIZE;
-		upage = pg_round_up((void *) (fault_addr - pg_idx));
-		success = pagedir_set_page(t->pagedir, upage, (void *) (kpage - pg_idx), true);
-		if (!success) {
-		       return false;
-		}	       
+	
+	if (!pagedir_set_page(t->pagedir, (void *) pg_round_down(fault_addr), kpage, true)) {
+		return false;
 	}
 	return true; 	
 }
 
-/*Determines the number of pages to extend the stack by. 
- * This implementation will map all pages from the current stack 
- * until the page with the faulting address. This makes the set 
- * of mapped pages continguous in virtual addresses */
-size_t num_pages_to_extend(uintptr_t esp, uintptr_t fault_addr) {
-	size_t size = (esp - fault_addr) / PGSIZE;
-	if (size == 0) {
-		return 1;
-	} else {
-		return size;
-	}
-}
-
-
 /* On a page fault, determines if we need to extend the stack. 
  * Returns true to extend the stack, returns false to terminate the process. */
-bool extend_stack(uintptr_t esp, uintptr_t fault_addr) {
-	if (fault_addr > esp || fault_addr == esp - 4 || fault_addr == esp - 32) {
+bool extend_stack(void *esp, void *fault_addr) {
+	if (fault_addr >= esp || fault_addr == esp - 4 || fault_addr == esp - 32) {
 		return true;
 	}
 	return false;
@@ -220,19 +198,12 @@ page_fault (struct intr_frame *f)
    * assume this; depending on the nature of the fault, the stack may need to
    * be grown.
    */
-  if (user) {
-    if (!is_user_vaddr(fault_addr)) {
-          syscall_exit(-1);
-    }
-    uintptr_t esp = (uintptr_t) f->esp;
-    uintptr_t faulting_address = (uintptr_t) fault_addr;
-    if (!extend_stack(esp, faulting_address)) {
-	syscall_exit (-1);
-    }
-    size_t num_pages = num_pages_to_extend(esp, faulting_address);
-    if (!allocate_new_pages(faulting_address, num_pages, t)) {
-	syscall_exit(-1);
-    }
+  void *esp = user ? f->esp : t->stack;
+  if (is_user_vaddr(fault_addr) && extend_stack(esp, fault_addr)) {
+        if (!allocate_new_page(fault_addr, t)) {
+            	syscall_exit(-1);
+       	}
+	return;
   }
 
   /* To implement virtual memory, delete the rest of the function
