@@ -128,8 +128,8 @@ bool allocate_new_pages(uintptr_t fault_addr, size_t n, struct thread *t) {
 
 	for (int i = 0; i < ((int) n); i++) {
 		pg_idx = i * PGSIZE;
-		upage = pg_round_up((void *) (fault_addr + pg_idx));
-		success = pagedir_set_page(t->pagedir, upage, (void *) (kpage + pg_idx), true);
+		upage = pg_round_up((void *) (fault_addr - pg_idx));
+		success = pagedir_set_page(t->pagedir, upage, (void *) (kpage - pg_idx), true);
 		if (!success) {
 		       return false;
 		}	       
