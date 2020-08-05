@@ -154,15 +154,10 @@ size_t num_pages_to_extend(uintptr_t esp, uintptr_t fault_addr) {
 /* On a page fault, determines if we need to extend the stack. 
  * Returns true to extend the stack, returns false to terminate the process. */
 bool extend_stack(uintptr_t esp, uintptr_t fault_addr) {
-	if (fault_addr > ((uintptr_t) PHYS_BASE) && fault_addr < esp) {
+	if (fault_addr > esp || fault_addr == esp - 4 || fault_addr == esp - 32) {
 		return true;
-	} else if (fault_addr > ((uintptr_t) PHYS_BASE) && fault_addr == esp - 4) {
-		return true;
-	} else if (fault_addr > ((uintptr_t) PHYS_BASE) && fault_addr == esp - 32) {
-		return true;
-	} else {
-		return false;
 	}
+	return false;
 }
 
 /* Page fault handler.  This is a skeleton that must be filled in
@@ -226,6 +221,9 @@ page_fault (struct intr_frame *f)
    * be grown.
    */
   if (user) {
+    if (!is_user_vaddr(fault_addr)) {
+          syscall_exit(-1);
+    }
     uintptr_t esp = (uintptr_t) f->esp;
     uintptr_t faulting_address = (uintptr_t) fault_addr;
     if (!extend_stack(esp, faulting_address)) {
