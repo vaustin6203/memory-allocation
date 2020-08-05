@@ -132,7 +132,7 @@ bool allocate_new_page(void *fault_addr, struct thread *t) {
 /* On a page fault, determines if we need to extend the stack. 
  * Returns true to extend the stack, returns false to terminate the process. */
 bool extend_stack(void *esp, void *fault_addr) {
-	if (fault_addr >= esp || fault_addr == esp - 4 || fault_addr == esp - 32) {
+	if (is_user_vaddr(fault_addr) && (fault_addr >= esp || fault_addr == esp - 4 || fault_addr == esp - 32)) {
 		return true;
 	}
 	return false;
@@ -199,12 +199,18 @@ page_fault (struct intr_frame *f)
    * be grown.
    */
   void *esp = user ? f->esp : t->stack;
-  if (is_user_vaddr(fault_addr) && extend_stack(esp, fault_addr)) {
+  bool extend = extend_stack(esp, fault_addr);
+
+  if (user && !extend) {
+	  syscall_exit(-1);
+  }
+  
+  if (extend) {
         if (!allocate_new_page(fault_addr, t)) {
             	syscall_exit(-1);
        	}
 	return;
-  }
+  } 
 
   /* To implement virtual memory, delete the rest of the function
      body, and replace it with code that brings in the page to
