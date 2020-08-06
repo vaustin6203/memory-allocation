@@ -159,10 +159,10 @@ syscall_handler (struct intr_frame *f)
       if (allocated >= t->end_heap) {
         break; 
       }
-      int num_pages = ((t->end_heap - allocated) / PGSIZE) + 1;
       void *pg1 = pg_round_up((void *) f->eax);
       
       if (inc > 0) {
+        int num_pages = ((t->end_heap - allocated) / PGSIZE) + 1;
 	      void *kpage;
         void *upage; 
 
@@ -178,17 +178,23 @@ syscall_handler (struct intr_frame *f)
           }
         }
       } else {
+        int num_pages = ((allocated - t->end_heap) / PGSIZE) + 1;
         void *upage;
         void *kpage;
 
         for (int i = 0; i < num_pages; i++) {
           int curr = f->eax - (i * PGSIZE);
-          if (curr < t->start_heap) {
-            t->end_heap += (num_pages - i - 1) * PGSIZE;
+          if (curr < t->start_heap){
+            //t->end_heap += (num_pages - i - 1) * PGSIZE;
+            f->eax = -1;
             break; 
           }
-          upage = pg_round_up((void *) curr);
+          upage = pg_round_down((void *) curr);
           kpage = pagedir_get_page(t->pagedir, upage);
+          if (kpage == NULL) {
+            f->eax = (void *) -1;
+            break;
+          }
           pagedir_clear_page(t->pagedir, upage);
           palloc_free_page(kpage);
         }

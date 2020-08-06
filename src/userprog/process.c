@@ -256,7 +256,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
   t->end_heap = t->start_heap;*/
   /*t->start_heap = ((0x804c8c1 / PGSIZE) + 1) * PGSIZE;
   t->end_heap = t->start_heap; */
-  t->start_heap = pg_round_up(file_ofs);
+  t->start_heap = pg_round_up(file_ofs + 0x804c8c1);
   t->end_heap = t->start_heap;
   
   for (i = 0; i < ehdr.e_phnum; i++)
