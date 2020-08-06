@@ -155,7 +155,7 @@ syscall_handler (struct intr_frame *f)
       }
 
       t->end_heap += inc;
-      uint32_t allocated = ((f->eax / PGSIZE) + 1) * PGSIZE;
+      uint32_t allocated = (uint32_t) pg_round_up((void *) f->eax);
       if (allocated >= t->end_heap) {
         break; 
       }
@@ -173,7 +173,7 @@ syscall_handler (struct intr_frame *f)
             sbrk_fail(pg1, i, f);
             break;
           } else if (!pagedir_set_page(t->pagedir, upage, kpage, true)){
-              sbrk_fail(pg1, i, f);
+              sbrk_fail(pg1, i + 1, f);
               break;
           }
         }
