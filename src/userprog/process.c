@@ -18,6 +18,7 @@
 #include "threads/synch.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+#include "lib/user/syscall.h"
 
 static struct semaphore temporary;
 static thread_func start_process NO_RETURN;
@@ -299,6 +300,12 @@ load (const char *file_name, void (**eip) (void), void **esp)
               if (!load_segment (file, file_page, (void *) mem_page,
                                  read_bytes, zero_bytes, writable))
                 goto done;
+	            if (i == ehdr.e_phnum - 1) {
+		            uint32_t last_seg = mem_page + read_bytes + zero_bytes;
+		            uint32_t r = last_seg % PGSIZE;
+		            t->start_heap = last_seg + r;
+		            t->end_heap = last_seg + r;
+	            }
             }
           else
             goto done;

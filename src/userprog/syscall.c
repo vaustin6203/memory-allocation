@@ -2,11 +2,14 @@
 #include <stdio.h>
 #include <string.h>
 #include <syscall-nr.h>
+#include <stdlib.h>
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 #include "filesys/filesys.h"
 #include "filesys/file.h"
+#include "threads/palloc.h"
+#include "userprog/pagedir.h"
 
 static void syscall_handler (struct intr_frame *);
 
@@ -77,6 +80,11 @@ syscall_write (int fd, void* buffer, unsigned size)
   return (int) file_write (t->open_file, buffer, size);
 }
 
+void sbrk_fail(void * start, int n, struct intr_frame *f) {
+   palloc_free_multiple(start, n);
+   f->eax = (void *) -1;
+}
+
 static int
 syscall_read (int fd, void* buffer, unsigned size)
 {
@@ -135,6 +143,50 @@ syscall_handler (struct intr_frame *f)
     case SYS_CLOSE:
       validate_buffer_in_user_region (&args[1], sizeof(uint32_t));
       syscall_close ((int) args[1]);
+      break;
+
+    case SYS_SBRK:
+      validate_buffer_in_user_region (&args[1], sizeof(uint32_t));
+      f->eax = (void *) t->end_heap;
+      intptr_t inc = (intptr_t) args[1];
+
+      if(inc == 0) {
+        break;
+      }
+
+      t->end_heap += inc;
+      int num_pages = abs(inc) / PGSIZE;
+
+      if(num_pages == 0 && pagedir_get_page(t->pagedir, pg_round_down((void *) f->eax))) {
+	      break;
+      } else if (inc > 0) {
+	      void *kpage;
+        void *upage; 
+
+	      for (int i = 0; i < num_pages; i++) {
+          upage = pg_round_down((void *) (f->eax + (i * PGSIZE)));
+          if (pagedir_get_page(t->pagedir, upage) == NULL) {
+  		      kpage = palloc_get_page(PAL_USER);
+            if(kpage == NULL) {
+              sbrk_fail(pg_round_down((void *) f->eax), i, f);
+              break;
+            }else if (!pagedir_set_page(t->pagedir, upage, kpage, true)){
+                sbrk_fail(pg_round_down((void *) f->eax), i, f);
+                break;
+            }
+          }
+        }
+      } else {
+        void *upage;
+        void *kpage;
+
+        for (int i = 0; i < num_pages; i++) {
+          upage = pg_round_down((void *) (f->eax - (i * PGSIZE)));
+          kpage = pagedir_get_page(t->pagedir, upage);
+          pagedir_clear_page(t->pagedir, upage);
+          palloc_free_page(kpage);
+        }
+      }
       break;
 
     default:
