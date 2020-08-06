@@ -189,8 +189,11 @@ page_fault (struct intr_frame *f)
    * the kernel and end up here. These checks below will allow us to determine
    * that this happened and terminate the process appropriately.
    */
-  if (!user && t->in_syscall && is_user_vaddr (fault_addr))
-    syscall_exit (-1);
+  void *esp = f->esp;
+  if (!user && t->in_syscall && is_user_vaddr (fault_addr)) {
+    esp = t->page_fault_esp;
+
+  }
 
   /*
    * If we faulted in user mode, then we assume it's an invalid memory access
@@ -198,7 +201,6 @@ page_fault (struct intr_frame *f)
    * assume this; depending on the nature of the fault, the stack may need to
    * be grown.
    */
-  void *esp = user ? f->esp : t->stack;
   bool extend = extend_stack(esp, fault_addr);
 
   if (user && !extend) {

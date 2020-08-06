@@ -100,7 +100,8 @@ struct thread
     uint32_t *pagedir;                  /* Page directory. */
 
     struct file* open_file;             /* Single open file supported. */
-    bool in_syscall;                    /* Stores if we are in a syscall. */
+    bool in_syscall;    /* Stores if we are in a syscall. */
+    uint8_t *page_fault_esp;
 #endif
 
     /* Owned by thread.c. */
