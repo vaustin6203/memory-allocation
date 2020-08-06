@@ -250,6 +250,13 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
   /* Read program headers. */
   file_ofs = ehdr.e_phoff;
+  /*uint32_t start = file_ofs + ehdr.e_phnum * ehdr.e_phentsize;
+  uint32_t r = start / PGSIZE;
+  t->start_heap = (r + 1) * PGSIZE;
+  t->end_heap = t->start_heap;*/
+  t->start_heap = ((0x804c8c1 / PGSIZE) + 1) * PGSIZE;
+  t->end_heap = t->start_heap; 
+  
   for (i = 0; i < ehdr.e_phnum; i++)
     {
       struct Elf32_Phdr phdr;
@@ -282,7 +289,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
               uint32_t mem_page = phdr.p_vaddr & ~PGMASK;
               uint32_t page_offset = phdr.p_vaddr & PGMASK;
               uint32_t read_bytes, zero_bytes;
-              if (phdr.p_filesz > 0)
+              if (phdr.p_filesz > 0) 
                 {
                   /* Normal segment.
                      Read initial part from disk and zero the rest. */
@@ -300,12 +307,12 @@ load (const char *file_name, void (**eip) (void), void **esp)
               if (!load_segment (file, file_page, (void *) mem_page,
                                  read_bytes, zero_bytes, writable))
                 goto done;
-	            if (i == ehdr.e_phnum - 1) {
+	            /**if (i == ehdr.e_phnum - 1) {
 		            uint32_t last_seg = mem_page + read_bytes + zero_bytes;
-		            uint32_t r = last_seg % PGSIZE;
-		            t->start_heap = last_seg + r;
-		            t->end_heap = last_seg + r;
-	            }
+		            uint32_t r = last_seg / PGSIZE;
+		            t->start_heap = (r + 1) * PGSIZE;
+		            t->end_heap = t->start_heap;
+	            } */
             }
           else
             goto done;
