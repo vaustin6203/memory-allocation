@@ -189,10 +189,12 @@ page_fault (struct intr_frame *f)
    * the kernel and end up here. These checks below will allow us to determine
    * that this happened and terminate the process appropriately.
    */
-  void *esp = f->esp;
+  void *esp = user ? f->esp : t->page_fault_esp;
+  bool extend = extend_stack(esp, fault_addr);
   if (!user && t->in_syscall && is_user_vaddr (fault_addr)) {
-    esp = t->page_fault_esp;
-
+	  if (!extend) {
+    		syscall_exit(-1);
+	  }
   }
 
   /*
@@ -201,8 +203,6 @@ page_fault (struct intr_frame *f)
    * assume this; depending on the nature of the fault, the stack may need to
    * be grown.
    */
-  bool extend = extend_stack(esp, fault_addr);
-
   if (user && !extend) {
 	  syscall_exit(-1);
   }
