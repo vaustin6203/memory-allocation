@@ -156,8 +156,9 @@ syscall_handler (struct intr_frame *f)
 
       t->end_heap += inc;
       int num_pages = abs(inc) / PGSIZE;
+      void *pg1 = pg_round_down((void *) f->eax);
 
-      if(num_pages == 0 && pagedir_get_page(t->pagedir, pg_round_down((void *) f->eax))) {
+      if(num_pages == 0 && is_user_vaddr(pg1) && pagedir_get_page(t->pagedir, pg1)) {
 	      break;
       } else if (inc > 0) {
 	      void *kpage;
@@ -181,7 +182,12 @@ syscall_handler (struct intr_frame *f)
         void *kpage;
 
         for (int i = 0; i < num_pages; i++) {
-          upage = pg_round_down((void *) (f->eax - (i * PGSIZE)));
+          int curr = f->eax - (i * PGSIZE);
+          if (curr < t->start_heap) {
+            t->end_heap += (num_pages - i - 1) * PGSIZE;
+            break; 
+          }
+          upage = pg_round_down((void *) curr);
           kpage = pagedir_get_page(t->pagedir, upage);
           pagedir_clear_page(t->pagedir, upage);
           palloc_free_page(kpage);
