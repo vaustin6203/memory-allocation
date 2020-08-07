@@ -81,10 +81,15 @@ syscall_write (int fd, void* buffer, unsigned size)
 }
 
 void sbrk_fail(void * start, int n, struct intr_frame *f, struct thread *t) {
-  void *kpage = pagedir_get_page(t->pagedir, start);
-  if (kpage != NULL) {
-    palloc_free_multiple(start, n);
-    t->end_heap = f->eax;
+  void *kpage;
+  void *upage;
+  for (int i = 0; i <= n; i++) {
+      upage = (void * ) (start - (i * PGSIZE));
+      kpage = pagedir_get_page(t->pagedir, upage);
+      if (kpage != NULL) {
+        pagedir_clear_page(t->pagedir, upage);
+        palloc_free_page(kpage);
+      }
   }
   t->end_heap = f->eax;
   f->eax = (void *) -1;
@@ -151,6 +156,7 @@ syscall_handler (struct intr_frame *f)
       break;
 
     case SYS_SBRK:
+    {
       validate_buffer_in_user_region (&args[1], sizeof(uint32_t));
       f->eax = (void *) t->end_heap;
       intptr_t inc = (intptr_t) args[1];
@@ -197,7 +203,7 @@ syscall_handler (struct intr_frame *f)
             f->eax = -1;
             break; 
           }
-          upage = pg_round_up((void *) curr);
+          upage = pg_round_down((void *) curr);
           kpage = pagedir_get_page(t->pagedir, upage);
           if (kpage == NULL) {
             f->eax = (void *) -1;
@@ -208,7 +214,7 @@ syscall_handler (struct intr_frame *f)
         }
       }
       break;
-
+    }
     default:
       printf ("Unimplemented system call: %d\n", (int) args[0]);
       break;
