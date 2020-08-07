@@ -166,6 +166,12 @@ syscall_handler (struct intr_frame *f)
       }
 
       t->end_heap += inc;
+      if (t->end_heap < t->start_heap) {
+        t->end_heap = f->eax;
+        f->eax = -1; 
+        break;
+      }
+      
       uint32_t allocated = (uint32_t) pg_round_up((void *) f->eax);
       if (allocated >= t->end_heap) {
         break; 
@@ -192,25 +198,14 @@ syscall_handler (struct intr_frame *f)
           }
         }
       } else {
-        int num_pages = ((allocated - t->end_heap) / PGSIZE) + 1;
-        void *upage;
         void *kpage;
+        uint32_t  deallocate = (uint32_t) pg_round_up((void *) t->end_heap);
 
-        for (int i = 0; i < num_pages; i++) {
-          int curr = t->end_heap  + (i * PGSIZE);
-          if (curr < t->start_heap){
-            //t->end_heap += (num_pages - i - 1) * PGSIZE;
-            f->eax = -1;
-            break; 
-          }
-          upage = pg_round_down((void *) curr);
-          kpage = pagedir_get_page(t->pagedir, upage);
-          if (kpage == NULL) {
-            f->eax = (void *) -1;
-            break;
-          }
-          pagedir_clear_page(t->pagedir, upage);
+        while(pg_no(allocated) >= pg_no(deallocate)) {
+          kpage = pagedir_get_page(t->pagedir, allocated);
+          pagedir_clear_page(t->pagedir, allocated);
           palloc_free_page(kpage);
+          allocated -= PGSIZE;
         }
       }
       break;
