@@ -80,19 +80,54 @@ syscall_write (int fd, void* buffer, unsigned size)
   return (int) file_write (t->open_file, buffer, size);
 }
 
-void sbrk_fail(void * start, int n, struct intr_frame *f, struct thread *t) {
+int sbrk(intptr_t inc, struct thread *t) {
+  void *upage = pg_round_up(t->end_heap);
+  if (inc == 0) {
+    return t->end_heap;
+  } else if (inc > 0) {
+    void *kpage; 
+    int allocated = 0;
+
+    while (pg_no(upage) < pg_no(pg_round_up(t->end_heap + inc))) {
+      if (pagedir_get_page(t->pagedir, upage) == NULL) {
+        kpage = palloc_get_page(PAL_USER);
+        if (kpage == NULL) {
+          sbrk_fail(upage, allocated, t);
+          return -1; 
+        }
+        pagedir_set_page(t->pagedir, upage, kpage, true);
+      }
+      upage += PGSIZE;
+      allocated++;
+    }
+  } else if (inc < 0) {
+    if (t->end_heap + inc < t->start_heap) {
+      return -1;
+    }
+    void *kpage;
+    while (pg_no(upage) >= pg_no(pg_round_up(t->end_heap + inc))) {
+      kpage = pagedir_get_page(t->pagedir, upage);
+      pagedir_clear_page(t->pagedir, upage);
+      palloc_free_page(kpage);
+      upage -= PGSIZE;
+    }
+  }
+
+  uint32_t og_break = t->end_heap; 
+  t->end_heap += inc;
+  return og_break;
+}
+
+void sbrk_fail(void *upage, int n, struct thread *t) {
   void *kpage;
-  void *upage;
-  for (int i = 0; i <= n; i++) {
-      upage = (void * ) (start - (i * PGSIZE));
+  for (int i = 0; i < n; i++) {
+      upage -= PGSIZE;
       kpage = pagedir_get_page(t->pagedir, upage);
       if (kpage != NULL) {
         pagedir_clear_page(t->pagedir, upage);
         palloc_free_page(kpage);
       }
   }
-  t->end_heap = f->eax;
-  f->eax = (void *) -1;
 }
 
 static int
@@ -158,56 +193,8 @@ syscall_handler (struct intr_frame *f)
     case SYS_SBRK:
     {
       validate_buffer_in_user_region (&args[1], sizeof(uint32_t));
-      f->eax = (void *) t->end_heap;
       intptr_t inc = (intptr_t) args[1];
-
-      if(inc == 0) {
-        break;
-      }
-
-      t->end_heap += inc;
-      if (t->end_heap < t->start_heap) {
-        t->end_heap = f->eax;
-        f->eax = -1; 
-        break;
-      }
-      
-      uint32_t allocated = (uint32_t) pg_round_up((void *) f->eax);
-      if (allocated >= t->end_heap) {
-        break; 
-      }
-      
-      if (inc > 0) {
-        int num_pages = ((t->end_heap - allocated) / PGSIZE) + 1;
-	      void *kpage;
-        void *upage; 
-        int pages_allocated = 0;
-
-	      for (int i = 0; i < num_pages; i++) {
-          upage = pg_round_up((void *) (f->eax + (i * PGSIZE)));
-          if (!pagedir_get_page(t->pagedir, upage)) {
-    		    kpage = palloc_get_page(PAL_USER);
-            if(kpage == NULL) {
-              sbrk_fail(upage, pages_allocated, f, t);
-              break;
-            } else if (!pagedir_set_page(t->pagedir, upage, kpage, true)){
-                sbrk_fail(upage, pages_allocated + 1, f, t);
-                break;
-            }
-            pages_allocated++;
-          }
-        }
-      } else {
-        void *kpage;
-        uint32_t  deallocate = (uint32_t) pg_round_up((void *) t->end_heap);
-
-        while(pg_no(allocated) >= pg_no(deallocate)) {
-          kpage = pagedir_get_page(t->pagedir, allocated);
-          pagedir_clear_page(t->pagedir, allocated);
-          palloc_free_page(kpage);
-          allocated -= PGSIZE;
-        }
-      }
+      f->eax = sbrk(inc, t);
       break;
     }
     default:
