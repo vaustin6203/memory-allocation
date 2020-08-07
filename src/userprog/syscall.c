@@ -84,7 +84,9 @@ void sbrk_fail(void * start, int n, struct intr_frame *f, struct thread *t) {
   void *kpage = pagedir_get_page(t->pagedir, start);
   if (kpage != NULL) {
     palloc_free_multiple(start, n);
+    t->end_heap = f->eax;
   }
+  t->end_heap = f->eax;
   f->eax = (void *) -1;
 }
 
@@ -162,26 +164,29 @@ syscall_handler (struct intr_frame *f)
       if (allocated >= t->end_heap) {
         break; 
       }
-      void *pg1 = pg_round_up((void *) f->eax);
       
       if (inc > 0) {
         int num_pages = ((t->end_heap - allocated) / PGSIZE) + 1;
 	      void *kpage;
         void *upage; 
+        int pages_allocated = 0;
 
 	      for (int i = 0; i < num_pages; i++) {
           upage = pg_round_up((void *) (f->eax + (i * PGSIZE)));
-  		    kpage = palloc_get_page(PAL_USER);
-          if(kpage == NULL) {
-            sbrk_fail(upage, i, f, t);
-            break;
-          } else if (!pagedir_set_page(t->pagedir, upage, kpage, true)){
-              sbrk_fail(upage, i + 1, f, t);
+          if (!pagedir_get_page(t->pagedir, upage)) {
+    		    kpage = palloc_get_page(PAL_USER);
+            if(kpage == NULL) {
+              sbrk_fail(upage, pages_allocated, f, t);
               break;
+            } else if (!pagedir_set_page(t->pagedir, upage, kpage, true)){
+                sbrk_fail(upage, pages_allocated + 1, f, t);
+                break;
+            }
+            pages_allocated++;
           }
         }
       } else {
-        int num_pages = ((allocated - f->eax + inc) / PGSIZE) + 1;
+        int num_pages = ((allocated - t->end_heap) / PGSIZE) + 1;
         void *upage;
         void *kpage;
 
