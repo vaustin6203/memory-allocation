@@ -71,31 +71,15 @@ malloc (size_t size)
   return &new_block->block[0]; 
 }
 
-struct heap_block* find_first_free_block(struct heap_block *block) {
-	struct heap_block *curr = block; 
-	while(curr != NULL) {
-		if(curr->prev == NULL) {
-			return curr;
-		} else if (curr->prev->free == true) {
-			curr = curr->prev;
-		} else {
-			return curr;
-		}
+void free_blocks(struct heap_block *h_block) {
+	struct heap_block *temp = h_block; 
+	if (h_block->prev != NULL && h_block->prev->free == true) {
+		h_block->prev->size += h_block->size + sizeof(struct heap_block);
 	}
-	return curr->prev;
-}
-
-void free_blocks(struct heap_block *block) {
-	struct heap_block *first_free = find_first_free_block(block);
-	size_t total_size = 0;
-	struct heap_block *curr = first_free;
-	while(curr != NULL) {
-		total_size += curr->size;
-		if (curr->next == NULL || curr->next->free == false) {
-			first_free->next = curr->next;
-			break; 
-		} 
-		curr = curr->next; 
+	if (temp->next != NULL && temp->next->free == true) {
+		h_block->size += temp->next->size + sizeof(struct heap_block);
+		h_block->next = temp->next;
+		temp->next->prev = h_block;
 	}
 }
 
