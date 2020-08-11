@@ -37,13 +37,13 @@ malloc (size_t size)
   struct heap_block *new_block;
   while(curr != NULL) {
   	if (curr->size >= size && curr->free == true) {
-  		if (curr->size - size >= sizeof(struct heap_block) + 1) {
+  		if (curr->size - size >= sizeof(struct heap_block)) {
   			curr->free = false;
-  			curr->size = size; 
   			temp = curr->next;
   			new_block = &curr->block[0] + size;
   			curr->next = new_block;
   			new_block->size = curr->size - size;
+        curr->size = size; 
   			new_block->free = true; 
   			new_block->next = temp; 
   			new_block->prev = curr;
@@ -72,15 +72,15 @@ malloc (size_t size)
 }
 
 void free_blocks(struct heap_block *h_block) {
-	struct heap_block *temp = h_block; 
-	if (h_block->prev != NULL && h_block->prev->free == true) {
-		h_block->prev->size += h_block->size + sizeof(struct heap_block);
-	}
-	if (temp->next != NULL && temp->next->free == true) {
-		h_block->size += temp->next->size + sizeof(struct heap_block);
-		h_block->next = temp->next;
-		temp->next->prev = h_block;
-	}
+ struct heap_block *temp = h_block; 
+  if (h_block->prev != NULL && h_block->prev->free == true) {
+    h_block->prev->size += h_block->size + sizeof(struct heap_block);
+  }
+  if (temp->next != NULL && temp->next->free == true) {
+    h_block->size += temp->next->size + sizeof(struct heap_block);
+    h_block->next = temp->next;
+    temp->next->prev = h_block;
+  }
 }
 
 void free (void* ptr)
